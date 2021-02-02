@@ -1,0 +1,13 @@
+<CustomLayer name="WarpAffine" type="SimpleGPU" version="1">
+<Kernel entry="warp_affine">
+    <Source filename="warp_affine.cl"/>
+</Kernel>
+<Buffers>
+    <Tensor arg-index="0" type="input" port-index="0"  format="BFYX"/>
+    <Tensor arg-index="1" type="input" port-index="1"  format="BFYX"/>
+    <Tensor arg-index="2" type="output" port-index="0" format="BFYX"/>
+</Buffers>
+
+<CompilerOptions options="-cl-mad-enable"/>
+<WorkSizes global="Y,((X + 31)/32)*32" local="1,32"/>
+</CustomLayer>
