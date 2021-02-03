@@ -88,19 +88,20 @@ StatusCode WarpAffineImpl::init(LayerConfig &config, ResponseDesc *resp) noexcep
 
 StatusCode WarpAffineImpl::execute(std::vector<Blob::Ptr> &inputs, std::vector<Blob::Ptr> &outputs, ResponseDesc *resp) noexcept {
     size_t IN = inputs[0]->getTensorDesc().getDims()[0];
+    size_t IC = inputs[0]->getTensorDesc().getDims()[1];
     size_t IH = inputs[0]->getTensorDesc().getDims()[2];
     size_t IW = inputs[0]->getTensorDesc().getDims()[3];
     size_t OH = outputs[0]->getTensorDesc().getDims()[2];
     size_t OW = outputs[0]->getTensorDesc().getDims()[3];
+    SizeVector strides_in = inputs[0]->getTensorDesc().getBlockingDesc().getStrides();
+    SizeVector strides_out = outputs[0]->getTensorDesc().getBlockingDesc().getStrides();
 
     auto *dst_data = outputs[0]->buffer().as<float *>();
 
     switch (inputs[0]->getTensorDesc().getPrecision()) {
         case Precision::FP32:
         {
-            size_t IC = inputs[0]->getTensorDesc().getBlockingDesc().getBlockDims()[1] *
-                        inputs[0]->getTensorDesc().getBlockingDesc().getBlockDims()[4];
-            interpolate(IN, IC, inputs[0]->buffer().as<const float *>(), IH, IW, dst_data, OH, OW, inputs[1]->buffer().as<const float *>());
+            interpolate(IN, IC, inputs[0]->buffer().as<const float *>(), IH, IW, dst_data, OH, OW, inputs[1]->buffer().as<const float *>(), strides_in, strides_out);
         }
             break;
         default:
@@ -115,109 +116,39 @@ StatusCode WarpAffineImpl::execute(std::vector<Blob::Ptr> &inputs, std::vector<B
 }
 
 void WarpAffineImpl::interpolate(const size_t N, const size_t C, const float* src, const size_t IH, const size_t IW, float* dst, const size_t OH,
-                                 const size_t OW, const float* matrices){
-#if defined(HAVE_AVX512F)
-    const int block_size = 16;
-#else
-    const int block_size = 8;
-#endif
-    const float zero_float = 0.f;
-
-    // Align channel number to block size to deal with channels padding in IE with multiple blobs
-    size_t CB = (C + block_size - 1) & (-block_size);
-    size_t CH = (C + block_size - 1) / block_size;
-
-    parallel_for3d(N, CH, OH, [&](size_t n, size_t cb, size_t h) {
+                                 const size_t OW, const float* matrices, const SizeVector& strides_in, const SizeVector& strides_out){
+    parallel_for3d(N, C, OH, [&](size_t n, size_t c, size_t h) {
         const float* matrix = matrices + 6 * n;
-        const float *psrc = src + n * CB * IH * IW;
+        const float *psrc_base = src + n * strides_in[0] + c * strides_in[1];
+        float *pdst_base = dst + n * strides_out[0] + c * strides_out[1] + h * strides_out[2];
 
         for (size_t w = 0; w < OW; ++w) {
             float xi = w*matrix[0] + h*matrix[1] + matrix[2];
             float yi = w*matrix[3] + h*matrix[4] + matrix[5];
 
-            const float *psrc00, *psrc01, *psrc10, *psrc11;
-            float h_lambda0 = 1.f, h_lambda1 = 0.f, w_lambda0 = 1.f, w_lambda1 = 0.f;
+            float *pdst = pdst_base + w * strides_out[3];
             if(xi < -0.f || yi < -0.f || xi >= (IW-1.f) || yi >= (IH-1.f)){
-                psrc00 = psrc01 = psrc10 = psrc11 = &zero_float;
+                *pdst = 0.f;
             }
             else{
                 int ih0 = (int)(yi);
                 int ih1 = ih0 + 1;
-                h_lambda0 = yi - ih0;
-                h_lambda1 = 1.0f - h_lambda0;
+                float h_lambda0 = yi - ih0;
+                float h_lambda1 = 1.0f - h_lambda0;
 
                 int iw0 = (int)(xi);
                 int iw1 = iw0 + 1;
-                w_lambda0 = xi - iw0;
-                w_lambda1 = 1.0f - w_lambda0;
+                float w_lambda0 = xi - iw0;
+                float w_lambda1 = 1.0f - w_lambda0;
 
-                psrc00 = psrc + cb * block_size * IW * IH + ih0 * IW * block_size + iw0 * block_size;
-                psrc01 = psrc + cb * block_size * IW * IH + ih0 * IW * block_size + iw1 * block_size;
-                psrc10 = psrc + cb * block_size * IW * IH + ih1 * IW * block_size + iw0 * block_size;
-                psrc11 = psrc + cb * block_size * IW * IH + ih1 * IW * block_size + iw1 * block_size;
+                const float *psrc00 = psrc_base + ih0 * strides_in[2] + iw0 * strides_in[3];
+                const float *psrc01 = psrc_base + ih0 * strides_in[2] + iw1 * strides_in[3];
+                const float *psrc10 = psrc_base + ih1 * strides_in[2] + iw0 * strides_in[3];
+                const float *psrc11 = psrc_base + ih1 * strides_in[2] + iw1 * strides_in[3];
+
+                *pdst =  h_lambda1 * (w_lambda1 * psrc00[c] + w_lambda0 * psrc01[c]) +
+                         h_lambda0 * (w_lambda1 * psrc10[c] + w_lambda0 * psrc11[c]);
             }
-            float *pdst = dst + n * CB * OH * OW + cb * block_size * OW * OH + h * OW * block_size +
-                          w * block_size;
-
-#if defined(HAVE_AVX512F)
-            __m512 vwl0 = _mm512_set1_ps(w_lambda0);
-                        __m512 vwl1 = _mm512_set1_ps(w_lambda1);
-                        __m512 vhl0 = _mm512_set1_ps(h_lambda0);
-                        __m512 vhl1 = _mm512_set1_ps(h_lambda1);
-                        __m512 vsrc00 = _mm512_loadu_ps(psrc00);
-                        __m512 vsrc01 = _mm512_loadu_ps(psrc01);
-                        __m512 vsrc10 = _mm512_loadu_ps(psrc10);
-                        __m512 vsrc11 = _mm512_loadu_ps(psrc11);
-
-                        __m512 vdst0 = _mm512_fmadd_ps(vwl1, vsrc00, _mm512_mul_ps(vwl0, vsrc01));
-                        __m512 vdst1 = _mm512_fmadd_ps(vwl1, vsrc10, _mm512_mul_ps(vwl0, vsrc11));
-                        __m512 vdst  = _mm512_fmadd_ps(vhl1, vdst0, _mm512_mul_ps(vhl0, vdst1));
-
-                        _mm512_storeu_ps(pdst, vdst);
-#elif defined(HAVE_AVX2)
-            __m256 vwl0 = _mm256_set1_ps(w_lambda0);
-                        __m256 vwl1 = _mm256_set1_ps(w_lambda1);
-                        __m256 vhl0 = _mm256_set1_ps(h_lambda0);
-                        __m256 vhl1 = _mm256_set1_ps(h_lambda1);
-                        __m256 vsrc00 = _mm256_loadu_ps(psrc00);
-                        __m256 vsrc01 = _mm256_loadu_ps(psrc01);
-                        __m256 vsrc10 = _mm256_loadu_ps(psrc10);
-                        __m256 vsrc11 = _mm256_loadu_ps(psrc11);
-
-                       __m256 vdst0 = _mm256_fmadd_ps(vwl1, vsrc00, _mm256_mul_ps(vwl0, vsrc01));
-                       __m256 vdst1 = _mm256_fmadd_ps(vwl1, vsrc10, _mm256_mul_ps(vwl0, vsrc11));
-                       __m256 vdst  = _mm256_fmadd_ps(vhl1, vdst0, _mm256_mul_ps(vhl0, vdst1));
-
-                       _mm256_storeu_ps(pdst, vdst);
-#elif defined(HAVE_SSE)
-            __m128 vwl0 = _mm_set1_ps(w_lambda0);
-                        __m128 vwl1 = _mm_set1_ps(w_lambda1);
-                        __m128 vhl0 = _mm_set1_ps(h_lambda0);
-                        __m128 vhl1 = _mm_set1_ps(h_lambda1);
-                        for (int i = 0; i < block_size/4; i++) {
-                            __m128 vsrc00 = _mm_loadu_ps(psrc00 + i*block_size/2);
-                            __m128 vsrc01 = _mm_loadu_ps(psrc01 + i*block_size/2);
-                            __m128 vsrc10 = _mm_loadu_ps(psrc10 + i*block_size/2);
-                            __m128 vsrc11 = _mm_loadu_ps(psrc11 + i*block_size/2);
-
-                           __m128 vdst00 = _mm_mul_ps(vwl1, vsrc00);
-                           __m128 vdst01 = _mm_mul_ps(vwl0, vsrc01);
-                           __m128 vdst10 = _mm_mul_ps(vwl1, vsrc10);
-                           __m128 vdst11 = _mm_mul_ps(vwl0, vsrc11);
-
-                           __m128 vdst0 = _mm_add_ps(vdst00, vdst01);
-                           __m128 vdst1 = _mm_add_ps(vdst10, vdst11);
-
-                            __m128 vdst = _mm_add_ps(_mm_mul_ps(vhl1, vdst0), _mm_mul_ps(vhl0, vdst1));
-
-                           _mm_storeu_ps(pdst + i*block_size/2, vdst);
-                        }
-#else
-            for (int c = 0; c < block_size; ++c) {
-                pdst[c] = h_lambda1 * (w_lambda1 * psrc00[c] + w_lambda0 * psrc01[c]) +
-                          h_lambda0 * (w_lambda1 * psrc10[c] + w_lambda0 * psrc11[c]);
-            }
-#endif
         }
     });
 }

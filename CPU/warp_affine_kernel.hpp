@@ -30,7 +30,7 @@ private:
     void interpolate(const size_t N, const size_t C,
                      const float *src, const size_t IH, const size_t IW,
                      float *dst, const size_t OH, const size_t OW,
-                     const float *matrices);
+                     const float *matrices, const InferenceEngine::SizeVector& strides_in, const InferenceEngine::SizeVector& strides_out);
 };
 
 }

@@ -11,10 +11,12 @@ namespace CustomLayers {
             WarpAffineOp() = default;
             WarpAffineOp(const ngraph::Output<ngraph::Node>& image,
                          const ngraph::Output<ngraph::Node>& transformation_matrix,
-                         const ngraph::Output<ngraph::Node>& output_shape);
+                         const ngraph::PartialShape& pshape);
             void validate_and_infer_types() override;
             std::shared_ptr<ngraph::Node> clone_with_new_inputs(const ngraph::OutputVector& new_args) const override;
             bool visit_attributes(ngraph::AttributeVisitor& visitor) override;
+        protected:
+            ngraph::PartialShape output_shape_;
     };
 }
 //! [fft_op:header]
