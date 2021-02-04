@@ -20,14 +20,17 @@ set(CPU_EXTENSIONS_BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE INTERNAL "")
 set(CMAKE_CXX_STANDARD 11)
 
 if(NOT IIE_INCLUDE_DIR)
-    set(IIE_DIR "/opt/iie/inference-engine/include")
+    set(IIE_INCLUDE_DIR "/opt/iie/inference_engine/include/")
 endif()
 if(NOT NGRAPH_INCLUDE_DIR)
-    set(IIE_DIR "/opt/iie/ngraph/core/include")
+    set(NGRAPH_INCLUDE_DIR "/opt/iie/ngraph/core/include/")
 endif()
 if(NOT IIE_LIB_DIR)
     set(IIE_DIR "/opt/iie")
 endif()
+
+message(${IIE_INCLUDE_DIR})
+message(${NGRAPH_INCLUDE_DIR})
 
 
 file(GLOB SRC ${CPU_EXTENSIONS_BASE_DIR}/*.cpp)
