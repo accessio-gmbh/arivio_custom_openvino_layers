@@ -33,5 +33,5 @@ target_link_libraries(${TARGET_NAME} PRIVATE
         ${IIE_DIR}/bin/intel64/Release/lib/libinference_engine_s.a
         ${IIE_DIR}/bin/intel64/Release/lib/libngraph_s.a
         ${IIE_DIR}/inference-engine/temp/tbb/lib/libtbb.so
-        ${IIE_DIR}}/bin/intel64/Release/lib/libitt.a)
+        ${IIE_DIR}/bin/intel64/Release/lib/libitt.a)
 
