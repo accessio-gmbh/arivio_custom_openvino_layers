@@ -19,7 +19,13 @@ set(CPU_EXTENSIONS_BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE INTERNAL "")
 
 set(CMAKE_CXX_STANDARD 11)
 
-if(NOT IIE_DIR)
+if(NOT IIE_INCLUDE_DIR)
+    set(IIE_DIR "/opt/iie/inference-engine/include")
+endif()
+if(NOT NGRAPH_INCLUDE_DIR)
+    set(IIE_DIR "/opt/iie/ngraph/core/include")
+endif()
+if(NOT IIE_LIB_DIR)
     set(IIE_DIR "/opt/iie")
 endif()
 
@@ -27,10 +33,7 @@ endif()
 file(GLOB SRC ${CPU_EXTENSIONS_BASE_DIR}/*.cpp)
 set(TARGET_NAME custom_cpu_extensions)
 add_library(${TARGET_NAME} SHARED ${SRC})
-target_include_directories(${TARGET_NAME} PUBLIC
-        /media/senfth/SSD500/dldt/2021/dldt/ngraph/core/include
-        /media/senfth/SSD500/dldt/2021/dldt/inference-engine/include/
-        )
+target_include_directories(${TARGET_NAME} PUBLIC ${IIE_INCLUDE_DIR} ${NGRAPH_INCLUDE_DIR})
 target_compile_definitions(${TARGET_NAME} PRIVATE IMPLEMENT_INFERENCE_EXTENSION_API)
 target_link_libraries(${TARGET_NAME} PRIVATE ${IIE_DIR}/libinference_engine_s.a ${IIE_DIR}/libngraph_s.a libtbb.so ${IIE_DIR}/libitt.a)
 
