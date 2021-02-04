@@ -30,8 +30,8 @@ add_library(${TARGET_NAME} SHARED ${SRC})
 target_include_directories(${TARGET_NAME} PUBLIC ${IIE_DIR}/inference-engine/include ${IIE_DIR}/ngraph/core/include/ ${IIE_DIR}/inference-engine/temp/tbb/include)
 target_compile_definitions(${TARGET_NAME} PRIVATE IMPLEMENT_INFERENCE_EXTENSION_API)
 target_link_libraries(${TARGET_NAME} PRIVATE
-        ${IIE_DIR}/libinference_engine_s.a
+        ${IIE_DIR}/bin/intel64/Release/lib/libinference_engine_s.a
         ${IIE_DIR}/bin/intel64/Release/lib/libngraph_s.a
         ${IIE_DIR}/inference-engine/temp/tbb/lib/libtbb.so
-        ${IIE_DIR}/libitt.a)
+        ${IIE_DIR}}/bin/intel64/Release/lib/libitt.a)
 
