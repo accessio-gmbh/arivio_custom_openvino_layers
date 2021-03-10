@@ -17,7 +17,10 @@ WarpAffineOp::WarpAffineOp(const ngraph::Output<ngraph::Node>& image,
 }
 
 void WarpAffineOp::validate_and_infer_types() {
-    set_output_type(0, get_input_element_type(0), output_shape_);
+    if(output_shape_.all_non_negative())
+        set_output_type(0, get_input_element_type(0), output_shape_);
+    else
+        set_output_type(0, get_input_element_type(0), get_input_partial_shape(0));
 }
 
 std::shared_ptr<ngraph::Node> WarpAffineOp::clone_with_new_inputs(const ngraph::OutputVector &new_args) const {
