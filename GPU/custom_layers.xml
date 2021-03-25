@@ -9,5 +9,5 @@
 </Buffers>
 
 <CompilerOptions options="-cl-mad-enable"/>
-<WorkSizes global="Y,((X + 31)/32)*32" local="1,32"/>
+<WorkSizes global="B*F,Y,((X+31)/32)*32" local="1,1,32"/>
 </CustomLayer>

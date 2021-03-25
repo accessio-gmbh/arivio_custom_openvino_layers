@@ -14,8 +14,6 @@
 
 #pragma OPENCL EXTENSION cl_khr_fp16 : enable
 
-#define VEC_SIZE 16
-
 #define _CAT(a,b) a##b
 #define CAT(a,b) _CAT(a,b)
 
@@ -24,11 +22,8 @@ inline void warpAffine(const int N, const int C,
                         __global OUTPUT0_TYPE* dst, const int OH, const int OW,
                         const __global INPUT1_TYPE* matrix)
 {
-    if (IH < 2)
-        return;
-
-    int h = get_global_id(0);
-    int w = get_global_id(1);
+    int h = get_global_id(1);
+    int w = get_global_id(2);
 
     if (w >= OW)
         return;
@@ -56,29 +51,14 @@ inline void warpAffine(const int N, const int C,
 //    INPUT0_TYPE xi = (xi_n + (INPUT0_TYPE)(1.f)) * (INPUT0_TYPE)(0.5f) * (INPUT0_TYPE)(IW);
 //    INPUT0_TYPE yi = (yi_n + (INPUT0_TYPE)(1.f)) * (INPUT0_TYPE)(0.5f) * (INPUT0_TYPE)(IH);
 
-    if (xi < (INPUT0_TYPE)(0.f) || yi < (INPUT0_TYPE)(0.f) || xi > IW-(INPUT0_TYPE)(1.f) || yi > IH-(INPUT0_TYPE)(-1.f)){
+    if (xi < (INPUT0_TYPE)(0.f) || yi < (INPUT0_TYPE)(0.f) || xi > IW-(INPUT0_TYPE)(1.f) || yi > IH-(INPUT0_TYPE)(1.f)){
         __global OUTPUT0_TYPE* pdst = dst + (h)*OUTPUT0_PITCHES[2] + (w)*OUTPUT0_PITCHES[3];
-#if defined(INPUT0_FORMAT_YXFB) && defined(OUTPUT0_FORMAT_YXFB)
-        typedef CAT(INPUT0_TYPE, VEC_SIZE) vec16_t;
-        __global vec16_t* pvdst = (__global vec16_t*)pdst;
-#endif
-
         for (int n = 0; n < N; n++)
         {
             int c = 0;
-    #if defined(INPUT0_FORMAT_YXFB) && defined(OUTPUT0_FORMAT_YXFB)
-            __attribute__((opencl_unroll_hint))
-            for (int vc = 0; c <= C - VEC_SIZE; c += VEC_SIZE, vc++)
-            {
-                int in_idx = (n*INPUT0_PITCHES[0] + vc*INPUT0_PITCHES[1]);
-                int out_idx = (n*OUTPUT0_PITCHES[0] + vc*OUTPUT0_PITCHES[1]);
-                pvdst[out_idx] = (vec16_t)(0.f);
-            }
-    #endif
             __attribute__((opencl_unroll_hint))
             for (; c < C; c++)
             {
-                int in_idx = n*INPUT0_PITCHES[0] + c*INPUT0_PITCHES[1];
                 int out_idx = n*OUTPUT0_PITCHES[0] + c*OUTPUT0_PITCHES[1];
                 pdst[out_idx] = (OUTPUT0_TYPE)(0.f);
             }
@@ -101,33 +81,9 @@ inline void warpAffine(const int N, const int C,
         const __global INPUT0_TYPE* psrc11 = src + (ih1)*INPUT0_PITCHES[2] + (iw1)*INPUT0_PITCHES[3];
 
         __global OUTPUT0_TYPE* pdst = dst + (h)*OUTPUT0_PITCHES[2] + (w)*OUTPUT0_PITCHES[3];
-
-    #if defined(INPUT0_FORMAT_YXFB) && defined(OUTPUT0_FORMAT_YXFB)
-        typedef CAT(INPUT0_TYPE, VEC_SIZE) vec16_t;
-
-        const __global vec16_t* pvsrc00 = (const __global vec16_t*)psrc00;
-        const __global vec16_t* pvsrc01 = (const __global vec16_t*)psrc01;
-        const __global vec16_t* pvsrc10 = (const __global vec16_t*)psrc10;
-        const __global vec16_t* pvsrc11 = (const __global vec16_t*)psrc11;
-
-        __global vec16_t* pvdst = (__global vec16_t*)pdst;
-    #endif
-
         for (int n = 0; n < N; n++)
         {
             int c = 0;
-    #if defined(INPUT0_FORMAT_YXFB) && defined(OUTPUT0_FORMAT_YXFB)
-            __attribute__((opencl_unroll_hint))
-            for (int vc = 0; c <= C - VEC_SIZE; c += VEC_SIZE, vc++)
-            {
-                int in_idx = (n*INPUT0_PITCHES[0] + vc*INPUT0_PITCHES[1]);
-                int out_idx = (n*OUTPUT0_PITCHES[0] + vc*OUTPUT0_PITCHES[1]);
-                pvdst[out_idx] = (vec16_t)(h_lambda1 * (w_lambda1 * pvsrc00[in_idx] +
-                                                        w_lambda0 * pvsrc01[in_idx]) +
-                                           h_lambda0 * (w_lambda1 * pvsrc10[in_idx] +
-                                                        w_lambda0 * pvsrc11[in_idx]));
-            }
-    #endif
             __attribute__((opencl_unroll_hint))
             for (; c < C; c++)
             {
@@ -139,6 +95,7 @@ inline void warpAffine(const int N, const int C,
         }
     }
 }
+
 
 __kernel void warp_affine(const __global INPUT0_TYPE*  input,
                           const __global INPUT1_TYPE*  matrix,
@@ -152,5 +109,5 @@ __kernel void warp_affine(const __global INPUT0_TYPE*  input,
     int OY = OUTPUT0_DIMS[2];
     int OX = OUTPUT0_DIMS[3];
 
-    warpAffine(IB, IF, input, IY, IX, output, OY, OX, matrix);
+    warpAffine_NC1(input, IY, IX, output, OY, OX, matrix);
 }
