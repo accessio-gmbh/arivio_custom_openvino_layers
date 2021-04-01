@@ -109,5 +109,5 @@ __kernel void warp_affine(const __global INPUT0_TYPE*  input,
     int OY = OUTPUT0_DIMS[2];
     int OX = OUTPUT0_DIMS[3];
 
-    warpAffine_NC1(input, IY, IX, output, OY, OX, matrix);
+    warpAffine(IB, IF, input, IY, IX, output, OY, OX, matrix);
 }
