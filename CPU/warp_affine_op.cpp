@@ -25,8 +25,10 @@ void WarpAffineOp::validate_and_infer_types() {
         out_shape[3] = ngraph::Dimension(out_shape[3].get_min_length() * scale_[1], out_shape[3].get_max_length() * scale_[1]);
         set_output_type(0, get_input_element_type(0), out_shape);
     }
-    else
+    else {
+        output_shape_[0] = ngraph::Dimension(get_input_partial_shape(0).get_min_shape()[0], get_input_partial_shape(0).get_max_shape()[0]);
         set_output_type(0, get_input_element_type(0), output_shape_);
+    }
 }
 
 std::shared_ptr<ngraph::Node> WarpAffineOp::clone_with_new_inputs(const ngraph::OutputVector &new_args) const {
