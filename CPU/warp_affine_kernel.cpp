@@ -128,7 +128,7 @@ void WarpAffineImpl::interpolate(const size_t N, const size_t C, const float* sr
 
             float *pdst = pdst_base + w * strides_out[3];
             if(xi < -0.f || yi < -0.f || xi >= (IW-1.f) || yi >= (IH-1.f)){
-                *pdst = 0.f;
+                *pdst = 84.f;
             }
             else{
                 int ih0 = (int)(yi);

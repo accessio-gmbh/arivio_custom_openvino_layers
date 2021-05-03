@@ -27,7 +27,7 @@ void WarpAffineOp::validate_and_infer_types() {
     }
     else {
         output_shape_[0] = ngraph::Dimension(get_input_partial_shape(0).get_min_shape()[0], get_input_partial_shape(0).get_max_shape()[0]);
-        set_output_type(0, get_input_element_type(0), output_shape_);
+        set_output_type(0, ngraph::element::Type(ngraph::element::Type_t::f32), output_shape_);
     }
 }
 
